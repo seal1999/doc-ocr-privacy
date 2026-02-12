@@ -17,21 +17,24 @@ MASK_MAP: dict[str, str] = {
 
 
 @mcp.tool()
-def mask_pii(text: str, pii_entities_json: str) -> str:
+def mask_pii(text: str, pii_entities_json: str | list) -> str:
     """검출된 PII를 마스킹 처리합니다.
 
     Args:
         text: 원본 텍스트
-        pii_entities_json: detect_pii에서 반환된 entities 배열의 JSON 문자열
+        pii_entities_json: detect_pii에서 반환된 entities 배열 (JSON 문자열 또는 리스트)
             예: [{"type": "휴대폰번호", "value": "010-1234-5678", "start": 0, "end": 13}]
 
     Returns:
         JSON 문자열: masked_text(마스킹된 텍스트), masked_count(마스킹 건수), details(상세 내역)
     """
-    try:
-        entities = json.loads(pii_entities_json)
-    except json.JSONDecodeError:
-        return json.dumps({"error": "pii_entities_json 파싱 실패"}, ensure_ascii=False)
+    if isinstance(pii_entities_json, list):
+        entities = pii_entities_json
+    else:
+        try:
+            entities = json.loads(pii_entities_json)
+        except json.JSONDecodeError:
+            return json.dumps({"error": "pii_entities_json 파싱 실패"}, ensure_ascii=False)
 
     # 뒤에서부터 치환하여 인덱스 보존
     entities_sorted = sorted(entities, key=lambda e: e["start"], reverse=True)
