@@ -2,23 +2,37 @@ import json
 import logging
 from pathlib import Path
 
+from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_ollama import ChatOllama
-from langgraph.prebuilt import create_react_agent
+from langgraph.prebuilt import ToolNode, create_react_agent
 
 SYSTEM_PROMPT = """\
 당신은 문서 이미지에서 개인정보를 찾아 마스킹하는 전문가입니다.
 
-반드시 다음 순서대로 도구를 하나씩 호출하세요. 한 번에 하나의 도구만 호출하세요:
+사용자가 이미지 경로를 제공하면, 반드시 아래 3개의 도구를 순서대로 모두 호출해야 합니다.
+도구를 하나씩 호출하고, 각 도구의 결과를 다음 도구의 입력으로 사용하세요.
+절대로 도구 호출을 생략하지 마세요. 3개 모두 호출해야 합니다.
 
-Step 1: ocr_image 도구를 호출하여 이미지에서 텍스트를 추출합니다.
-Step 2: detect_pii 도구를 호출하여 추출된 텍스트에서 개인정보(PII)를 검출합니다. \
-text 파라미터에는 Step 1 결과의 full_text 값을 전달하세요.
-Step 3: mask_pii 도구를 호출하여 PII를 마스킹합니다. \
-text 파라미터에는 Step 1 결과의 full_text 값을, \
-pii_entities_json 파라미터에는 Step 2 결과의 entities 배열을 JSON 문자열로 전달하세요.
+## 도구 호출 순서
 
-모든 도구 호출이 끝나면 mask_pii의 masked_text 결과를 사용자에게 보여주세요.
+### Step 1: ocr_image
+- image_path: 사용자가 제공한 이미지 파일 경로
+- 결과: JSON에서 "full_text" 값을 기억하세요 (이후 Step 2, 3에서 사용)
+
+### Step 2: detect_pii
+- text: Step 1에서 얻은 full_text 값을 그대로 전달
+- 결과: JSON에서 "entities" 배열을 기억하세요 (Step 3에서 사용)
+
+### Step 3: mask_pii (반드시 호출할 것!)
+- text: Step 1에서 얻은 full_text 값을 그대로 전달
+- pii_entities_json: Step 2에서 얻은 entities 배열을 JSON 문자열로 전달
+- 결과: "masked_text" 값이 최종 결과입니다
+
+## 중요
+- 3개의 도구를 모두 호출한 후에만 최종 응답을 작성하세요.
+- mask_pii를 호출하지 않으면 작업이 완료되지 않은 것입니다.
+- 최종 응답에서는 mask_pii의 masked_text 결과를 보여주세요.
 """
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -70,11 +84,11 @@ def _extract_tool_text(content) -> str:
 
 
 async def run(image_path: str, model: str = "llama3.2:latest") -> str:
-    """이미지에서 OCR → PII 검출 → 마스킹 파이프라인을 실행합니다."""
+    """이미지에서 OCR → PII 검출 → 마스킹을 ReAct Agent로 실행합니다."""
     log_path = Path(image_path).with_suffix(".log")
     _setup_logger(log_path)
 
-    logger.info("파이프라인 시작: image_path=%s, model=%s", image_path, model)
+    logger.info("에이전트 시작: image_path=%s, model=%s", image_path, model)
 
     llm = ChatOllama(model=model, temperature=0)
 
@@ -83,41 +97,90 @@ async def run(image_path: str, model: str = "llama3.2:latest") -> str:
     tool_map = {t.name: t for t in tools}
     logger.info("MCP 도구 로드 완료: %s", list(tool_map.keys()))
 
-    # Step 1: OCR
-    logger.info("Step 1: ocr_image 호출")
-    ocr_result_raw = await tool_map["ocr_image"].ainvoke({"image_path": image_path})
-    ocr_text = _extract_tool_text(ocr_result_raw)
-    ocr_data = json.loads(ocr_text)
-    full_text = ocr_data["full_text"]
-    logger.info("OCR 결과: %s", full_text)
+    tool_node = ToolNode(tools, handle_tool_errors=True)
+    agent = create_react_agent(model=llm, tools=tool_node, prompt=SYSTEM_PROMPT)
 
-    # Step 2: PII 검출
-    logger.info("Step 2: detect_pii 호출")
-    pii_result_raw = await tool_map["detect_pii"].ainvoke({"text": full_text})
+    logger.info("에이전트 실행 시작")
+    messages = []
+    try:
+        result = await agent.ainvoke(
+            {"messages": [HumanMessage(content=f"이 이미지에서 개인정보를 찾아 마스킹해주세요: {image_path}")]},
+            config={"recursion_limit": 10},
+        )
+        messages = result["messages"]
+    except Exception as e:
+        logger.warning("에이전트 실행 중 예외 발생: %s", e)
+
+    # 메시지 히스토리 로깅
+    for msg in messages:
+        logger.info("[%s] %s", msg.type, _extract_tool_text(msg.content)[:500])
+
+    # mask_pii 결과에서 masked_text 추출 시도
+    masked_text = _find_masked_text(messages)
+
+    # 폴백: Agent가 mask_pii를 호출하지 못한 경우
+    if masked_text is None:
+        logger.warning("Agent가 mask_pii를 호출하지 못함 - 폴백 실행")
+        masked_text = await _fallback_masking(messages, tool_map, image_path)
+
+    if masked_text is None:
+        logger.error("마스킹 결과를 얻지 못함")
+        masked_text = "마스킹 결과를 생성하지 못했습니다."
+
+    logger.info("최종 결과: %s", masked_text)
+    return masked_text
+
+
+def _find_masked_text(messages) -> str | None:
+    """메시지 히스토리에서 mask_pii 도구 결과의 masked_text를 추출합니다."""
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage) and msg.name == "mask_pii" and msg.status != "error":
+            try:
+                text = _extract_tool_text(msg.content)
+                data = json.loads(text)
+                return data.get("masked_text")
+            except (json.JSONDecodeError, AttributeError):
+                continue
+    return None
+
+
+async def _fallback_masking(messages, tool_map: dict, image_path: str) -> str | None:
+    """Agent가 실패한 경우, OCR → detect_pii → mask_pii를 직접 순차 호출합니다."""
+    # 메시지에서 OCR 결과 추출 시도
+    ocr_full_text = None
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+        text = _extract_tool_text(msg.content)
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, AttributeError):
+            continue
+        if msg.name == "ocr_image" and "full_text" in data:
+            ocr_full_text = data["full_text"]
+
+    # OCR 결과가 없으면 직접 호출
+    if ocr_full_text is None:
+        logger.info("폴백: ocr_image 직접 호출")
+        ocr_result_raw = await tool_map["ocr_image"].ainvoke({"image_path": image_path})
+        ocr_text = _extract_tool_text(ocr_result_raw)
+        ocr_data = json.loads(ocr_text)
+        ocr_full_text = ocr_data["full_text"]
+
+    # detect_pii 직접 호출
+    logger.info("폴백: detect_pii 직접 호출")
+    pii_result_raw = await tool_map["detect_pii"].ainvoke({"text": ocr_full_text})
     pii_text = _extract_tool_text(pii_result_raw)
     pii_data = json.loads(pii_text)
-    logger.info("PII 검출 결과: %d건 - %s", pii_data["pii_count"], pii_data["entities"])
+    logger.info("폴백: PII 검출 %d건", pii_data["pii_count"])
 
-    # Step 3: 마스킹
-    logger.info("Step 3: mask_pii 호출")
+    # mask_pii 직접 호출
+    logger.info("폴백: mask_pii 직접 호출")
     entities_json = json.dumps(pii_data["entities"], ensure_ascii=False)
     mask_result_raw = await tool_map["mask_pii"].ainvoke({
-        "text": full_text,
+        "text": ocr_full_text,
         "pii_entities_json": entities_json,
     })
     mask_text = _extract_tool_text(mask_result_raw)
     mask_data = json.loads(mask_text)
-    masked_text = mask_data["masked_text"]
-    logger.info("마스킹 결과: %s", masked_text)
-
-    # LLM 요약
-    logger.info("LLM 요약 생성")
-    summary = await llm.ainvoke(
-        f"다음은 이미지에서 추출한 텍스트의 개인정보를 마스킹한 결과입니다. "
-        f"원본에서 {pii_data['pii_count']}건의 개인정보가 검출되어 마스킹되었습니다.\n\n"
-        f"마스킹된 텍스트:\n{masked_text}\n\n"
-        f"위 결과를 사용자에게 보기 좋게 정리해서 보여주세요."
-    )
-
-    logger.info("파이프라인 완료")
-    return masked_text
+    return mask_data.get("masked_text")
