@@ -1,10 +1,23 @@
-2026-02-12 15:02:58,654 [INFO] 파이프라인 시작: image_path=samples/sample_image.png, model=qwen2.5:7b
-2026-02-12 15:03:01,335 [INFO] MCP 도구 로드 완료: ['ocr_image', 'detect_pii', 'mask_pii']
-2026-02-12 15:03:01,335 [INFO] Step 1: ocr_image 호출
-2026-02-12 15:03:05,283 [INFO] OCR 결과: 이름: 홍길동 전화번호: 010-1234-5678 이메일: hong@exarnple com 주민등록번호: 900701-1234567 카드번호: 1234-5678-9012-3456
-2026-02-12 15:03:05,283 [INFO] Step 2: detect_pii 호출
-2026-02-12 15:03:05,978 [INFO] PII 검출 결과: 5건 - [{'type': '휴대폰번호', 'value': '010-1234-5678', 'start': 14, 'end': 27}, {'type': '계좌번호', 'value': '010-1234-5678', 'start': 14, 'end': 27}, {'type': '주민등록번호', 'value': '900701-1234567', 'start': 59, 'end': 73}, {'type': '카드번호', 'value': '1234-5678-9012-3456', 'start': 80, 'end': 99}, {'type': '계좌번호', 'value': '1234-5678-9012-3456', 'start': 80, 'end': 99}]
-2026-02-12 15:03:05,978 [INFO] Step 3: mask_pii 호출
-2026-02-12 15:03:06,736 [INFO] 마스킹 결과: 이름: 홍길동 전화번호: ***-***-****** 이메일: hong@exarnple com 주민등록번호: ******-******* 카드번호: ***-***-******
-2026-02-12 15:03:06,736 [INFO] LLM 요약 생성
-2026-02-12 15:03:09,388 [INFO] 파이프라인 완료
+2026-02-12 15:25:42,722 [INFO] 에이전트 시작: image_path=samples/sample_image.png, model=llama3.2:latest
+2026-02-12 15:25:44,919 [INFO] MCP 도구 로드 완료: ['ocr_image', 'detect_pii', 'mask_pii']
+2026-02-12 15:25:44,924 [INFO] 에이전트 실행 시작
+2026-02-12 15:26:05,347 [INFO] [human] 이 이미지에서 개인정보를 찾아 마스킹해주세요: samples/sample_image.png
+2026-02-12 15:26:05,347 [INFO] [ai] 
+2026-02-12 15:26:05,347 [INFO] [tool] {"full_text": "이름: 홍길동 전화번호: 010-1234-5678 이메일: hong@exarnple com 주민등록번호: 900701-1234567 카드번호: 1234-5678-9012-3456", "details": [{"text": "이름: 홍길동", "confidence": 0.7022, "bbox": [[28, 20], [160, 20], [160, 52], [28, 52]]}, {"text": "전화번호: 010-1234-5678", "confidence": 0.5466, "bbox": [[28, 80], [316, 80], [316, 112], [28, 112]]}, {"text": "이메일: hong@exarnple com", "confidence": 0.5747, "bbox": [[27, 137], [343, 137], [343, 176], [27, 176]]}, {"text": "주민등록번호: 900701-1234567", "confidence": 0.60
+2026-02-12 15:26:05,347 [INFO] [tool] {"pii_count": 0, "entities": []}
+2026-02-12 15:26:05,347 [INFO] [tool] Error: ToolException('1 validation error for call[mask_pii]\ntext\n  Input should be a valid string [type=string_type, input_value={}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/string_type')
+ Please fix your mistakes.
+2026-02-12 15:26:05,347 [INFO] [ai] }
+{"name": "detect_pii", "parameters": {"text":"{"full_text": "이름: 홍길동 전화번호: 010-1234-5678 이메일: hong@exarnple com 주민등록번호: 900701-1234567 카드번호: 1234-5678-9012-3456", "details": [{"text": "이름: 홍길동", "confidence": 0.7022, "bbox": [[28, 20], [160, 20], [160, 52], [28, 52]]}, {"text": "전화번호: 010-1234-5678", "confidence": 0.5466, "bbox": [[28, 80], [316, 80], [316, 112], [28, 112]]}, {"text": "이메일: hong@exarnple com", "confidence": 0.5747, "bbox": [[27, 137], [343, 137], [343, 176], [27, 176]]}, {"tex
+2026-02-12 15:26:05,347 [INFO] [tool] {"full_text": "이름: 홍길동 전화번호: 010-1234-5678 이메일: hong@exarnple com 주민등록번호: 900701-1234567 카드번호: 1234-5678-9012-3456", "details": [{"text": "이름: 홍길동", "confidence": 0.7022, "bbox": [[28, 20], [160, 20], [160, 52], [28, 52]]}, {"text": "전화번호: 010-1234-5678", "confidence": 0.5466, "bbox": [[28, 80], [316, 80], [316, 112], [28, 112]]}, {"text": "이메일: hong@exarnple com", "confidence": 0.5747, "bbox": [[27, 137], [343, 137], [343, 176], [27, 176]]}, {"text": "주민등록번호: 900701-1234567", "confidence": 0.60
+2026-02-12 15:26:05,348 [INFO] [ai] 
+2026-02-12 15:26:05,348 [INFO] [tool] Error: ToolException("2 validation errors for call[mask_pii]\npii_entities_json.str\n  Input should be a valid string [type=string_type, input_value={'entities': [{'type': 'E...'1234-5678-9012-3456'}]}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/string_type\npii_entities_json.list[any]\n  Input should be a valid list [type=list_type, input_value={'entities': [{'type': 'E...'1234-5678-9012-3456'}]}, input_type=dict]\n    For further information visit ht
+2026-02-12 15:26:05,348 [INFO] [ai] 
+2026-02-12 15:26:05,348 [INFO] [tool] Error: ToolException("Error calling tool 'mask_pii': 'start'")
+ Please fix your mistakes.
+2026-02-12 15:26:05,348 [INFO] [ai] Sorry, need more steps to process this request.
+2026-02-12 15:26:05,348 [WARNING] Agent가 mask_pii를 호출하지 못함 - 폴백 실행
+2026-02-12 15:26:05,348 [INFO] 폴백: detect_pii 직접 호출
+2026-02-12 15:26:06,046 [INFO] 폴백: PII 검출 5건
+2026-02-12 15:26:06,046 [INFO] 폴백: mask_pii 직접 호출
+2026-02-12 15:26:06,706 [INFO] 최종 결과: 이름: 홍길동 전화번호: ***-***-****** 이메일: hong@exarnple com 주민등록번호: ******-******* 카드번호: ***-***-******
