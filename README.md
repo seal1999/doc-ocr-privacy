@@ -87,6 +87,48 @@ ollama pull qwen2.5:7b
 uv run python main.py samples/sample_image.png --model qwen2.5:7b
 ```
 
+## 샘플 실행 예시
+
+`samples/sample_image.png`에 포함된 테스트 이미지로 전체 파이프라인을 확인할 수 있습니다.
+
+### 입력 이미지 (`samples/sample_image.png`)
+
+```
+이름: 홍길동
+전화번호: 010-1234-5678
+이메일: hong@example.com
+주민등록번호: 900101-1234567
+카드번호: 1234-5678-9012-3456
+```
+
+### 실행
+
+```bash
+uv run python main.py samples/sample_image.png --model qwen2.5:7b
+```
+
+### 출력 결과 (`samples/sample_image.txt`)
+
+```
+이름: 홍길동 전화번호: ***-***-****** 이메일: hong@exarnple com 주민등록번호: ******-******* 카드번호: ***-***-******
+```
+
+### 실행 로그 (`samples/sample_image.log`)
+
+```
+[INFO] 파이프라인 시작: image_path=samples/sample_image.png, model=qwen2.5:7b
+[INFO] MCP 도구 로드 완료: ['ocr_image', 'detect_pii', 'mask_pii']
+[INFO] Step 1: ocr_image 호출
+[INFO] OCR 결과: 이름: 홍길동 전화번호: 010-1234-5678 이메일: hong@exarnple com 주민등록번호: 900701-1234567 카드번호: 1234-5678-9012-3456
+[INFO] Step 2: detect_pii 호출
+[INFO] PII 검출 결과: 5건
+[INFO] Step 3: mask_pii 호출
+[INFO] 마스킹 결과: 이름: 홍길동 전화번호: ***-***-****** 이메일: hong@exarnple com 주민등록번호: ******-******* 카드번호: ***-***-******
+[INFO] 파이프라인 완료
+```
+
+실행 시 이미지와 같은 위치에 `.txt`(마스킹 결과)와 `.log`(실행 로그) 파일이 자동 생성됩니다.
+
 ## 참고 사항
 
 - **Python 3.12**: PyTorch 호환성을 위해 `.python-version`으로 고정
