@@ -1,0 +1,13 @@
+[project]
+name = "doc-ocr-privacy"
+version = "0.1.0"
+description = "Single Agent MCP project: OCR → PII Detection → Masking"
+requires-python = ">=3.12"
+dependencies = [
+    "easyocr>=1.7.2",
+    "fastmcp>=2.0,<3",
+    "langchain>=0.3",
+    "langchain-ollama>=0.3",
+    "langchain-mcp-adapters>=0.2",
+    "langgraph>=0.4",
+]
