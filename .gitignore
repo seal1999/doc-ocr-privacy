@@ -29,3 +29,6 @@ Thumbs.db
 
 # Environment
 .env
+
+# Practice notebooks
+single_agent_mcp_practice.ipynb
