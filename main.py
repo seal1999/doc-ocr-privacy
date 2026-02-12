@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-import sys
+from pathlib import Path
 
 from agent.ocr_privacy_agent import run
 
@@ -13,6 +13,10 @@ def main():
 
     result = asyncio.run(run(args.image_path, args.model))
     print(result)
+
+    output_path = Path(args.image_path).with_suffix(".txt")
+    output_path.write_text(result, encoding="utf-8")
+    print(f"\n결과 저장: {output_path}")
 
 
 if __name__ == "__main__":
